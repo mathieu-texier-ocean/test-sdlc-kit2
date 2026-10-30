@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# commit-msg — impose les trailers du SDLC git.
+#
+# Sur une branche need/<id>/<étape>, ajoute automatiquement « Need: <id> » et
+# « Stage: plan|design|build » s’ils manquent. Ailleurs, ajoute « Need: none ».
+#
+# Activation (une fois par clone) : git config core.hooksPath .githooks
+# Rappel : un hook client se contourne avec --no-verify ; le contrôle qui fait
+# foi est le check CI « sdlc-conventions », requis par le ruleset de main.
+set -euo pipefail
+
+MSG=$1
+STAGES='plan|design|build|test|deploy|maintain'
+
+cc=$(git config --get core.commentChar 2>/dev/null || echo '#')
+[ "$cc" = auto ] && cc='#'
+
+# Message vide (hors commentaires) : laisser git abandonner le commit lui-même.
+if ! grep -v "^${cc}" "$MSG" | grep -q '[^[:space:]]'; then
+  exit 0
+fi
+
+branch=$(git symbolic-ref --short -q HEAD 2>/dev/null || true)
+id=""
+if [[ $branch =~ ^need/([^/]+)/(intent|spec|build)$ ]]; then
+  id=${BASH_REMATCH[1]}
+  case ${BASH_REMATCH[2]} in
+    intent) st=plan ;;
+    spec)   st=design ;;
+    build)  st=build ;;
+  esac
+  git interpret-trailers --in-place --if-exists doNothing \
+    --trailer "Need: $id" --trailer "Stage: $st" "$MSG"
+else
+  git interpret-trailers --in-place --if-exists doNothing --trailer "Need: none" "$MSG"
+fi
+
+trailers=$(git interpret-trailers --parse "$MSG")
+need=$(printf '%s\n' "$trailers" | sed -n 's/^[Nn]eed:[[:space:]]*//p' | head -n1)
+stage=$(printf '%s\n' "$trailers" | sed -n 's/^[Ss]tage:[[:space:]]*//p' | head -n1)
+
+refuse() {
+  printf 'commit-msg : commit refusé — %s\n' "$1" >&2
+  cat >&2 <<'EOF'
+
+Terminez le message par un paragraphe de trailers, par exemple :
+
+    Need: 2026-10-28-claims-status
+    Stage: build
+
+Ou travaillez sur une branche need/<id>/<intent|spec|build> : les trailers
+y sont ajoutés automatiquement.
+EOF
+  exit 1
+}
+
+[ -n "$need" ] || refuse "trailer « Need: » manquant"
+if [ "$need" != none ] && ! [[ $need =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+  refuse "valeur de Need invalide : « $need »"
+fi
+if [ -n "$id" ] && [ "$need" != "$id" ]; then
+  refuse "Need: $need ne correspond pas à la branche $branch"
+fi
+if [ -n "$stage" ] && ! [[ $stage =~ ^($STAGES)$ ]]; then
+  refuse "Stage: $stage inconnu (attendu : ${STAGES//|/, })"
+fi
+exit 0

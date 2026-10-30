@@ -1,0 +1,14 @@
+# Configuration partagée de git-sdlc (format git config, lue par le script).
+# Une valeur locale (git config sdlc.<clé>) l'emporte sur ce fichier.
+[sdlc]
+	# Branche protégée vers laquelle toutes les PR sont ouvertes.
+	main = main
+	# Dossier des artefacts de besoin.
+	intentDir = intent
+	# Équipe GitHub autorisée à créer les tags de livraison YY.MM.DD[.V] (git sdlc setup).
+	releaseTeam = release-managers
+	# Nombre maximal de PR lues par status et board.
+	prLimit = 300
+	# Arguments de gh pr merge pour git sdlc merge. Garder --rebase : seul le rebase
+	# conserve les trailers Need:/Stage: sur chaque commit.
+	mergeArgs = --rebase --delete-branch

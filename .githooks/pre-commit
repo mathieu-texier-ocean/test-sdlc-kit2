@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# pre-commit — contrôles locaux du SDLC sur le contenu du commit.
+#
+# 1. Tout <intentDir>/<id>/intent.md stagé contient les sections obligatoires : les titres
+#    "## " de templates/intent.md, hors « Questions ouvertes ». Présence
+#    uniquement, pas la qualité du contenu.
+# 2. Aucune ligne ajoutée ne contient de credential en clair (.githooks/lib/credential.sh).
+#    Faux positif : marqueur credential-ok sur la ligne.
+#
+# Activation (une fois par clone) : git config core.hooksPath .githooks
+# Rappel : se contourne avec --no-verify ; le check CI « sdlc-conventions » revérifie
+# les credentials sur la PR.
+set -u
+
+root=$(git rev-parse --show-toplevel)
+. "$root/.githooks/lib/credential.sh"
+
+idir=$(git config --get sdlc.intentDir 2>/dev/null \
+  || git config -f "$root/.sdlc/config" --get sdlc.intentDir 2>/dev/null \
+  || echo intent)
+template="$root/templates/intent.md"
+optional="Questions ouvertes"
+status=0
+
+required=()
+if [ -f "$template" ]; then
+  while IFS= read -r line; do
+    [ "$line" = "$optional" ] || required+=("$line")
+  done < <(sed -n 's/^## \(.*[^[:space:]]\)[[:space:]]*$/\1/p' "$template")
+fi
+
+# -z : chemins bruts, sans les guillemets de core.quotePath.
+while IFS= read -r -d '' path; do
+  case $path in
+    "$idir"/*/intent.md) ;;
+    *) continue ;;
+  esac
+  if [ ${#required[@]} -eq 0 ]; then
+    echo "pre-commit : templates/intent.md introuvable, sections de $path non vérifiées." >&2
+    continue
+  fi
+  content=$(git show ":$path")
+  missing=()
+  for section in "${required[@]}"; do
+    printf '%s\n' "$content" | grep -qxF "## $section" || missing+=("$section")
+  done
+  if [ ${#missing[@]} -gt 0 ]; then
+    list=$(printf '%s, ' "${missing[@]}"); list=${list%, }
+    echo "$path : section(s) obligatoire(s) manquante(s) : $list. Recopiez les titres de templates/intent.md." >&2
+    status=1
+  fi
+done < <(git diff --cached --name-only -z --diff-filter=ACMR)
+
+scan_credentials --cached >&2 || status=1
+
+exit $status

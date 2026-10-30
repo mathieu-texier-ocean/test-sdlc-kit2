@@ -1,0 +1,33 @@
+# Check requis par le ruleset « sdlc-main » (créé par git sdlc setup).
+# Le nom du job, sdlc-conventions, est celui que le ruleset exige : ne le renommez pas
+# sans relancer git sdlc setup.
+name: SDLC
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+
+# Un nouvel évènement sur la PR annule le run précédent, devenu sans objet.
+concurrency:
+  group: sdlc-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sdlc-conventions:
+    name: sdlc-conventions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Conventions du SDLC
+        env:
+          # Passées par variables d'environnement : le nom de branche n'est jamais interprété par le shell.
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: bash .github/scripts/sdlc-check.sh
