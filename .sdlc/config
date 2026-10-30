@@ -4,7 +4,7 @@
 	# Branche protégée vers laquelle toutes les PR sont ouvertes.
 	main = main
 	# Dossier des artefacts de besoin.
-	intentDir = intent
+	intentDir = requirements
 	# Équipe GitHub autorisée à créer les tags de livraison YY.MM.DD[.V] (git sdlc setup).
 	releaseTeam = release-managers
 	# Nombre maximal de PR lues par status et board.
